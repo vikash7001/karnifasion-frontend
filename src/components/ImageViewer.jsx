@@ -1,45 +1,182 @@
-import React, {useEffect, useState} from 'react';
-import { api } from '../services/api';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 
-export default function ImageViewer(){
-  const [series,setSeries] = useState([]);
-  const [images,setImages] = useState([]);
-  const [sel, setSel] = useState('');
+const API = "https://karnifasion-backend.onrender.com";
 
-  useEffect(()=>{ loadSeries(); }, []);
+export default function ImageViewer({ onExit }) {
 
-  async function loadSeries(){
-    try{
-      const res = await api.get('/series');
-      setSeries(res.data || []);
-    }catch(err){ console.error(err); }
-  }
+  const [mode, setMode] = useState("");          // Item | Series | Category
+  const [options, setOptions] = useState([]);    // values for dropdown 2
+  const [selected, setSelected] = useState("");  // selected option
+  const [images, setImages] = useState([]);      // list of images
 
-  async function loadImages(){
-    try{
-      if(!sel) return;
-      const res = await api.get(`/images/series/${encodeURIComponent(sel)}`);
-      setImages(res.data || []);
-    }catch(err){ console.error(err); }
-  }
+  // ------------------------------------------
+  // LOAD DROPDOWN 2 OPTIONS BASED ON MODE
+  // ------------------------------------------
+  useEffect(() => {
+    if (!mode) return;
+
+    setSelected("");
+    setImages([]);
+    setOptions([]);
+
+    if (mode === "Item") {
+      axios.get(`${API}/products`)
+        .then(res => {
+          const list = res.data.map(x => x.Item);
+          setOptions(list);
+        });
+
+    } else if (mode === "Series") {
+      axios.get(`${API}/series/active-with-stock`)
+        .then(res => {
+          const list = res.data.map(x => x.SeriesName);
+          setOptions(list);
+        });
+
+    } else if (mode === "Category") {
+      axios.get(`${API}/categories/active-with-stock`)
+        .then(res => {
+          const list = res.data.map(x => x.CategoryName);
+          setOptions(list);
+        });
+    }
+
+  }, [mode]);
+
+
+  // ------------------------------------------
+  // LOAD IMAGES BASED ON SELECTION
+  // ------------------------------------------
+  useEffect(() => {
+    if (!selected) return;
+
+    // ITEM → single image
+    if (mode === "Item") {
+      axios.post(`${API}/stock`, { role: "Admin", customerType: 0 })
+        .then(res => {
+          const product = res.data.find(x => x.Item === selected);
+          if (!product) return;
+          axios.get(`${API}/image/${product.ProductID}`)
+            .then(r => setImages(r.data.ImageURL ? [r.data.ImageURL] : []));
+        });
+    }
+
+    // SERIES → list of images
+    if (mode === "Series") {
+      axios.get(`${API}/images/series/${selected}`)
+        .then(res => {
+          const list = res.data.map(x => x.ImageURL);
+          setImages(list);
+        });
+    }
+
+    // CATEGORY → list of images
+    if (mode === "Category") {
+      axios.get(`${API}/images/category/${selected}`)
+        .then(res => {
+          const list = res.data.map(x => x.ImageURL);
+          setImages(list);
+        });
+    }
+
+  }, [selected]);
+
+
+  // ------------------------------------------
+  // PDF DOWNLOAD (2 images per page)
+  // ------------------------------------------
+  const downloadPDF = () => {
+    alert("PDF generation will be added next step.");
+  };
+
 
   return (
-    <div>
-      <h3>Image Viewer</h3>
-      <div className="row">
-        <select value={sel} onChange={e=>setSel(e.target.value)}>
-          <option value=''>-- select series --</option>
-          {series.map(s=> <option key={s.SeriesName} value={s.SeriesName}>{s.SeriesName}</option>)}
+    <div style={{ padding: 20 }}>
+
+      <h2>Image Viewer</h2>
+
+      {/* EXIT */}
+      <button onClick={onExit} style={{ marginBottom: 15 }}>
+        Exit
+      </button>
+
+      {/* DROPDOWN 1 */}
+      <div>
+        <label>Select Mode: </label>
+        <select value={mode} onChange={(e) => setMode(e.target.value)}>
+          <option value="">-- Select --</option>
+          <option value="Item">Item</option>
+          <option value="Series">Series</option>
+          <option value="Category">Category</option>
         </select>
-        <button onClick={loadImages}>Load</button>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:12}}>
-        {images.map(img => (
-          <div key={img.ProductID} style={{border:'1px solid #eee',padding:6}}>
-            <img src={img.ImageURL} alt="" style={{width:'100%'}} />
-          </div>
+
+      {/* DROPDOWN 2 */}
+      {mode && (
+        <div style={{ marginTop: 10 }}>
+          <label>Select {mode}: </label>
+          <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">-- Select --</option>
+            {options.map((x, i) => (
+              <option key={i} value={x}>{x}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* PDF BUTTON */}
+      {images.length > 0 && (
+        <button
+          onClick={downloadPDF}
+          style={{ marginTop: 15 }}
+        >
+          Download PDF
+        </button>
+      )}
+
+      {/* IMAGE VIEW AREA */}
+      <div
+        style={{
+          marginTop: 20,
+          maxHeight: "75vh",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px"
+        }}
+      >
+        {images.length === 0 && selected && (
+          <div>No images found.</div>
+        )}
+
+        {/* ALWAYS 2 PER ROW */}
+        {images.length > 0 &&
+          images.reduce((rows, url, i) => {
+            if (i % 2 === 0) rows.push([url]);
+            else rows[rows.length - 1].push(url);
+            return rows;
+          }, []).map((pair, idx) => (
+            <div
+              key={idx}
+              style={{
+                display: "flex",
+                gap: "10px",
+                justifyContent: "flex-start"
+              }}
+            >
+              {pair.map((url, j) => (
+                <img
+                  key={j}
+                  src={url}
+                  alt=""
+                  style={{ width: "48%", objectFit: "contain" }}
+                />
+              ))}
+            </div>
         ))}
       </div>
+
     </div>
   );
 }
