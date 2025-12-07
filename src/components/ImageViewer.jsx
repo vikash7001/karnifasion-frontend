@@ -5,14 +5,48 @@ const API = "https://karnifasion-backend.onrender.com";
 
 export default function ImageViewer({ onExit }) {
 
-  const [mode, setMode] = useState("");          // Item | Series | Category
-  const [options, setOptions] = useState([]);    // values for dropdown 2
-  const [selected, setSelected] = useState("");  // selected option
-  const [images, setImages] = useState([]);      // list of images
+  const [mode, setMode] = useState("");
+  const [options, setOptions] = useState([]);
+  const [selected, setSelected] = useState("");
+  const [images, setImages] = useState([]);
 
-  // ------------------------------------------
-  // LOAD DROPDOWN 2 OPTIONS BASED ON MODE
-  // ------------------------------------------
+  // --------------------------------------------------
+  // UNIVERSAL GOOGLE DRIVE → THUMBNAIL URL CONVERTER
+  // --------------------------------------------------
+  function toDriveThumbnail(url) {
+    if (!url) return "";
+
+    let id = "";
+
+    // Case 1 → /file/d/FILEID/
+    if (url.includes("/file/d/")) {
+      id = url.split("/file/d/")[1].split("/")[0];
+    }
+
+    // Case 2 → open?id=FILEID
+    else if (url.includes("open?id=")) {
+      id = url.split("open?id=")[1].split("&")[0];
+    }
+
+    // Case 3 → uc?id=FILEID
+    else if (url.includes("uc?id=")) {
+      id = url.split("uc?id=")[1].split("&")[0];
+    }
+
+    // Case 4 → thumbnail?id=FILEID
+    else if (url.includes("thumbnail?id=")) {
+      id = url.split("thumbnail?id=")[1].split("&")[0];
+    }
+
+    if (!id) return url;
+
+    return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+  }
+
+
+  // --------------------------------------------------
+  // LOAD OPTIONS BASED ON MODE
+  // --------------------------------------------------
   useEffect(() => {
     if (!mode) return;
 
@@ -23,31 +57,28 @@ export default function ImageViewer({ onExit }) {
     if (mode === "Item") {
       axios.get(`${API}/products`)
         .then(res => {
-          const list = res.data.map(x => x.Item);
-          setOptions(list);
+          setOptions(res.data.map(x => x.Item));
         });
 
     } else if (mode === "Series") {
       axios.get(`${API}/series/active-with-stock`)
         .then(res => {
-          const list = res.data.map(x => x.SeriesName);
-          setOptions(list);
+          setOptions(res.data.map(x => x.SeriesName));
         });
 
     } else if (mode === "Category") {
       axios.get(`${API}/categories/active-with-stock`)
         .then(res => {
-          const list = res.data.map(x => x.CategoryName);
-          setOptions(list);
+          setOptions(res.data.map(x => x.CategoryName));
         });
     }
 
   }, [mode]);
 
 
-  // ------------------------------------------
+  // --------------------------------------------------
   // LOAD IMAGES BASED ON SELECTION
-  // ------------------------------------------
+  // --------------------------------------------------
   useEffect(() => {
     if (!selected) return;
 
@@ -57,8 +88,12 @@ export default function ImageViewer({ onExit }) {
         .then(res => {
           const product = res.data.find(x => x.Item === selected);
           if (!product) return;
+
           axios.get(`${API}/image/${product.ProductID}`)
-            .then(r => setImages(r.data.ImageURL ? [r.data.ImageURL] : []));
+            .then(r => {
+              const url = r.data.ImageURL || "";
+              setImages(url ? [toDriveThumbnail(url)] : []);
+            });
         });
     }
 
@@ -66,7 +101,7 @@ export default function ImageViewer({ onExit }) {
     if (mode === "Series") {
       axios.get(`${API}/images/series/${selected}`)
         .then(res => {
-          const list = res.data.map(x => x.ImageURL);
+          const list = res.data.map(x => toDriveThumbnail(x.ImageURL));
           setImages(list);
         });
     }
@@ -75,7 +110,7 @@ export default function ImageViewer({ onExit }) {
     if (mode === "Category") {
       axios.get(`${API}/images/category/${selected}`)
         .then(res => {
-          const list = res.data.map(x => x.ImageURL);
+          const list = res.data.map(x => toDriveThumbnail(x.ImageURL));
           setImages(list);
         });
     }
@@ -83,9 +118,9 @@ export default function ImageViewer({ onExit }) {
   }, [selected]);
 
 
-  // ------------------------------------------
-  // PDF DOWNLOAD (2 images per page)
-  // ------------------------------------------
+  // --------------------------------------------------
+  // PDF DOWNLOAD — FUTURE STEP
+  // --------------------------------------------------
   const downloadPDF = () => {
     alert("PDF generation will be added next step.");
   };
@@ -96,12 +131,10 @@ export default function ImageViewer({ onExit }) {
 
       <h2>Image Viewer</h2>
 
-      {/* EXIT */}
       <button onClick={onExit} style={{ marginBottom: 15 }}>
         Exit
       </button>
 
-      {/* DROPDOWN 1 */}
       <div>
         <label>Select Mode: </label>
         <select value={mode} onChange={(e) => setMode(e.target.value)}>
@@ -112,7 +145,6 @@ export default function ImageViewer({ onExit }) {
         </select>
       </div>
 
-      {/* DROPDOWN 2 */}
       {mode && (
         <div style={{ marginTop: 10 }}>
           <label>Select {mode}: </label>
@@ -125,17 +157,12 @@ export default function ImageViewer({ onExit }) {
         </div>
       )}
 
-      {/* PDF BUTTON */}
       {images.length > 0 && (
-        <button
-          onClick={downloadPDF}
-          style={{ marginTop: 15 }}
-        >
+        <button onClick={downloadPDF} style={{ marginTop: 15 }}>
           Download PDF
         </button>
       )}
 
-      {/* IMAGE VIEW AREA */}
       <div
         style={{
           marginTop: 20,
@@ -146,11 +173,11 @@ export default function ImageViewer({ onExit }) {
           gap: "10px"
         }}
       >
+
         {images.length === 0 && selected && (
           <div>No images found.</div>
         )}
 
-        {/* ALWAYS 2 PER ROW */}
         {images.length > 0 &&
           images.reduce((rows, url, i) => {
             if (i % 2 === 0) rows.push([url]);
@@ -175,6 +202,7 @@ export default function ImageViewer({ onExit }) {
               ))}
             </div>
         ))}
+
       </div>
 
     </div>
