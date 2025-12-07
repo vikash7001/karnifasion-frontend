@@ -16,36 +16,46 @@ export default function ImageViewer({ onExit }) {
   function toDriveThumbnail(url) {
     if (!url) return "";
 
+    // Already a thumbnail → return as-is
+    if (url.includes("drive.google.com/thumbnail")) {
+      return url;
+    }
+
+    // Dropbox or other servers → return as-is
+    if (!url.includes("drive.google.com") && !url.match(/^[A-Za-z0-9_-]{15,}$/)) {
+      return url;
+    }
+
     let id = "";
 
-    // Case 1 → /file/d/FILEID/
-    if (url.includes("/file/d/")) {
+    // Case 1: Only file ID (like 10001 input)
+    if (url.match(/^[A-Za-z0-9_-]{15,}$/)) {
+      id = url;
+    }
+
+    // Case 2: /file/d/FILEID/
+    else if (url.includes("/file/d/")) {
       id = url.split("/file/d/")[1].split("/")[0];
     }
 
-    // Case 2 → open?id=FILEID
+    // Case 3: open?id=FILEID
     else if (url.includes("open?id=")) {
       id = url.split("open?id=")[1].split("&")[0];
     }
 
-    // Case 3 → uc?id=FILEID
+    // Case 4: uc?id=FILEID
     else if (url.includes("uc?id=")) {
       id = url.split("uc?id=")[1].split("&")[0];
     }
 
-    // Case 4 → thumbnail?id=FILEID
-    else if (url.includes("thumbnail?id=")) {
-      id = url.split("thumbnail?id=")[1].split("&")[0];
-    }
-
-    if (!id) return url;
+    if (!id) return url; // fallback
 
     return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
   }
 
 
   // --------------------------------------------------
-  // LOAD OPTIONS BASED ON MODE
+  // LOAD DROPDOWN OPTIONS
   // --------------------------------------------------
   useEffect(() => {
     if (!mode) return;
@@ -57,19 +67,22 @@ export default function ImageViewer({ onExit }) {
     if (mode === "Item") {
       axios.get(`${API}/products`)
         .then(res => {
-          setOptions(res.data.map(x => x.Item));
+          const list = res.data.map(x => x.Item);
+          setOptions(list);
         });
 
     } else if (mode === "Series") {
       axios.get(`${API}/series/active-with-stock`)
         .then(res => {
-          setOptions(res.data.map(x => x.SeriesName));
+          const list = res.data.map(x => x.SeriesName);
+          setOptions(list);
         });
 
     } else if (mode === "Category") {
       axios.get(`${API}/categories/active-with-stock`)
         .then(res => {
-          setOptions(res.data.map(x => x.CategoryName));
+          const list = res.data.map(x => x.CategoryName);
+          setOptions(list);
         });
     }
 
@@ -97,7 +110,7 @@ export default function ImageViewer({ onExit }) {
         });
     }
 
-    // SERIES → list of images
+    // SERIES → multiple images
     if (mode === "Series") {
       axios.get(`${API}/images/series/${selected}`)
         .then(res => {
@@ -106,7 +119,7 @@ export default function ImageViewer({ onExit }) {
         });
     }
 
-    // CATEGORY → list of images
+    // CATEGORY → multiple images
     if (mode === "Category") {
       axios.get(`${API}/images/category/${selected}`)
         .then(res => {
@@ -119,7 +132,7 @@ export default function ImageViewer({ onExit }) {
 
 
   // --------------------------------------------------
-  // PDF DOWNLOAD — FUTURE STEP
+  // PDF DOWNLOAD PLACEHOLDER
   // --------------------------------------------------
   const downloadPDF = () => {
     alert("PDF generation will be added next step.");
@@ -140,7 +153,7 @@ export default function ImageViewer({ onExit }) {
         <select value={mode} onChange={(e) => setMode(e.target.value)}>
           <option value="">-- Select --</option>
           <option value="Item">Item</option>
-          <option value="Series">Series</option>
+          <option value="Series">Series</          option>
           <option value="Category">Category</option>
         </select>
       </div>
@@ -158,7 +171,10 @@ export default function ImageViewer({ onExit }) {
       )}
 
       {images.length > 0 && (
-        <button onClick={downloadPDF} style={{ marginTop: 15 }}>
+        <button
+          onClick={downloadPDF}
+          style={{ marginTop: 15 }}
+        >
           Download PDF
         </button>
       )}
